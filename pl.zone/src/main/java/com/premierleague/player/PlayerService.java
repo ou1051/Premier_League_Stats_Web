@@ -18,6 +18,10 @@ public class PlayerService {
         this.playerRepository = playerRepository;
     }
 
+    //----------------in the future---------------------
+    //ranking: getTop10ByOrderGoalsScored
+    //findTop10----
+
     public List<Player> getPlayers() {
         return playerRepository.findAll();
     }
@@ -28,14 +32,25 @@ public class PlayerService {
     }
 
     public List<Player> getPlayersByTeam(String team) {
-        return playerRepository.findByTeam(team);
+        return playerRepository.findByTeam(team); // spring will automatically create SQL and send it to DB
     }
 
     public List<Player> getPlayersByName(String name) {
-        return playerRepository.findByWebNameContainingIgnoreCase(name);
+        return playerRepository.findByWebNameContainingIgnoreCase(name); // assuming user will search in webName
     }
 
     public List<Player> getPlayersByPosition(String position) {
         return playerRepository.findByPosition(position);
+    }
+
+    public List<Player> getPlayersByTeamAndPosition(String team, String position) {
+        return playerRepository.findByTeamAndPosition(team, position);
+    }
+
+    public Player addPlayer(Player player) {
+        if (playerRepository.existsById(player.getPlayerId())) {
+            throw new IllegalStateException("Player already exists: " + player.getPlayerId());
+        }
+        return playerRepository.save(player);
     }
 }
