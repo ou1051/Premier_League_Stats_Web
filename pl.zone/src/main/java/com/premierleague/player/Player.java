@@ -5,6 +5,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -39,10 +40,10 @@ public class Player {
     private Integer yellowCards;
     private Integer redCards;
 
-    private Double expectedGoals;
-    private Double expectedAssists;
-    private Double expectedGoalInvolvements;
-    private Double expectedGoalsConceded;
+    private BigDecimal expectedGoals;
+    private BigDecimal expectedAssists;
+    private BigDecimal expectedGoalInvolvements;
+    private BigDecimal expectedGoalsConceded;
 
     @Id // part of composite PK
     private String season;             // "2026-27"
@@ -139,19 +140,19 @@ public class Player {
         return redCards;
     }
 
-    public Double getExpectedGoals() {
+    public BigDecimal getExpectedGoals() {
         return expectedGoals;
     }
 
-    public Double getExpectedAssists() {
+    public BigDecimal getExpectedAssists() {
         return expectedAssists;
     }
 
-    public Double getExpectedGoalInvolvements() {
+    public BigDecimal getExpectedGoalInvolvements() {
         return expectedGoalInvolvements;
     }
 
-    public Double getExpectedGoalsConceded() {
+    public BigDecimal getExpectedGoalsConceded() {
         return expectedGoalsConceded;
     }
 
@@ -249,19 +250,19 @@ public class Player {
         this.redCards = redCards;
     }
 
-    public void setExpectedGoals(Double expectedGoals) {
+    public void setExpectedGoals(BigDecimal expectedGoals) {
         this.expectedGoals = expectedGoals;
     }
 
-    public void setExpectedAssists(Double expectedAssists) {
+    public void setExpectedAssists(BigDecimal expectedAssists) {
         this.expectedAssists = expectedAssists;
     }
 
-    public void setExpectedGoalInvolvements(Double expectedGoalInvolvements) {
+    public void setExpectedGoalInvolvements(BigDecimal expectedGoalInvolvements) {
         this.expectedGoalInvolvements = expectedGoalInvolvements;
     }
 
-    public void setExpectedGoalsConceded(Double expectedGoalsConceded) {
+    public void setExpectedGoalsConceded(BigDecimal expectedGoalsConceded) {
         this.expectedGoalsConceded = expectedGoalsConceded;
     }
 
