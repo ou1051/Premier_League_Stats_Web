@@ -4,6 +4,7 @@ import pandas as pd
 from pathlib import Path
 from sqlalchemy import create_engine
 
+
 URL = "https://fantasy.premierleague.com/api/bootstrap-static/"
 
 res = requests.get(URL, timeout=30)
