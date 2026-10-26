@@ -1,44 +1,62 @@
 # Premier_League_Stats_Web
 
-Premier_League_Stats_Web is a project designed to scrape match statistics for over 660 players, store and serve the data dynamically via a REST API, and eventually predict match outcomes using machine learning. The project is divided into three main components (with a fourth planned): **Data Scraping**, **Database**, **Backend**, and **Frontend** (in progress).
+Premier_League_Stats_Web collects season statistics for every Premier League player (about 660 per run) from the official **Fantasy Premier League (FPL) API**, stores each collection run in PostgreSQL, and serves the data through a Spring Boot REST API. A React frontend is in progress, and match-outcome prediction with machine learning is planned as a later extension.
+
+The project has four components: **Data Collection**, **Database**, **Backend**, and **Frontend** (in progress).
 
 ---
 
 ## Table of Contents
 
 - [Overview](#overview)
+- [Data Source](#data-source)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Components](#components)
-  - [Data Scraping](#data-scraping)
+  - [Data Collection](#data-collection)
   - [Database](#database)
   - [Backend](#backend)
-  - [Frontend](#frontend-)
+  - [Frontend](#frontend)
 - [Setup & Installation](#setup--installation)
   - [Prerequisites](#prerequisites)
   - [Database Setup](#database-setup)
-  - [Running the Scraper](#running-the-scraper)
+  - [Running the Data Collector](#running-the-data-collector)
   - [Running the Backend](#running-the-backend)
 - [API Endpoints](#api-endpoints)
 - [Environment Variables](#environment-variables)
+- [Roadmap](#roadmap)
 
 ---
 
 ## Overview
 
-Premier_League_Stats_Web scrapes player statistics from **FBref** (Premier League Stats page), normalises the data with pandas, and inserts it into a PostgreSQL database. Each collection run is timestamped, so historical snapshots accumulate over time and season-over-season comparisons become possible. A Spring Boot backend then exposes the data through a REST API ready to be consumed by a frontend.
+A Python script requests player data from the FPL API, cleans and normalises it with pandas, and writes it both to a dated CSV snapshot and to a PostgreSQL database. Every run is timestamped (`collected_at`), so snapshots accumulate over the season and make it possible to track how a player's numbers develop over time. A Spring Boot backend reads the most recent snapshot and exposes it through a REST API for the frontend.
+
+---
+
+## Data Source
+
+All data comes from the public FPL endpoint:
+
+```
+https://fantasy.premierleague.com/api/bootstrap-static/
+```
+
+This endpoint returns JSON containing every player (`elements`), every club (`teams`) and the position types (`element_types`). Column names such as `web_name`, `element_type` and the numeric `id` fields are FPL's own naming.
+
+**Why FPL instead of FBref:** the project originally planned to scrape the HTML tables on FBref's Premier League Stats page. FBref blocked automated requests, so the data source was switched to the FPL API. This turned out to be the better choice: the data arrives as structured JSON instead of HTML, it is updated during the season, and it already includes expected-goals metrics (xG, xA, xGI, xGC).
 
 ---
 
 ## Tech Stack
 
-| Layer        | Technology                              |
-|--------------|-----------------------------------------|
-| Scraping     | Python 3, `requests`, `pandas`, `BeautifulSoup4` |
-| ORM / DB     | SQLAlchemy 2, `psycopg` 3, PostgreSQL 18|
-| Backend      | Java 21, Spring Boot 4, Spring Data JPA |
-| Frontend     | React (in progress)                  |
-| Build tool   | Maven (Spring Boot Maven Plugin)        |
+| Layer           | Technology                                   |
+|-----------------|----------------------------------------------|
+| Data collection | Python 3, `requests`, `pandas`               |
+| ORM / DB        | SQLAlchemy 2, `psycopg` 3, PostgreSQL 18     |
+| Backend         | Java 21, Spring Boot 4, Spring Data JPA      |
+| Frontend        | React (in progress)                          |
+| Build tool      | Maven (Spring Boot Maven Plugin)             |
 
 ---
 
@@ -47,7 +65,7 @@ Premier_League_Stats_Web scrapes player statistics from **FBref** (Premier Leagu
 ```
 Premier_League_Stats_Web/
 ├── scraper/
-│   ├── scraper.py          # FBref → CSV + PostgreSQL pipeline
+│   ├── scraper.py          # FPL API → CSV + PostgreSQL pipeline
 │   └── requirements.txt    # Python dependencies
 ├── db/
 │   └── schema.sql          # PostgreSQL table definition
@@ -68,26 +86,24 @@ Premier_League_Stats_Web/
 
 ## Components
 
-### Data Scraping
+### Data Collection
 
-**Location:** `scraper/`
-
-The scraper fetches data from **FBref**'s Premier League Stats page:
-
-```
-https://fbref.com/en/comps/9/2025-2026/2025-2026-Premier-League-Stats
-```
+**Location:** `scraper/scraper.py`
 
 **What it does:**
 
-1. Scrapes the HTML stats tables and parses them with pandas / BeautifulSoup.
-2. Selects the relevant columns per player (standard stats, expected goals, defensive actions, etc.).
-3. Cleans and normalises column types (xG-family strings → floats, `birth_date` → DATE).
-4. Adds `season` (`"2026-27"`) and `collected_at` (current timestamp floored to the second).
-5. Saves a dated CSV snapshot to `scraper/data/fpl_players_YYYY-MM-DD.csv`.
-6. Inserts all rows into PostgreSQL via SQLAlchemy (`if_exists='append'`), capturing **667 players** per run.
+1. Sends a GET request to the FPL `bootstrap-static` endpoint and parses the JSON response.
+2. Converts the player list (`elements`) into a pandas DataFrame and keeps only the relevant columns (standard stats, expected-goals metrics, defensive actions, discipline).
+3. Maps FPL IDs to readable values:
+   - `team` ID → club name (e.g. `1` → `Arsenal`)
+   - `element_type` ID → position (`GKP`, `DEF`, `MID`, `FWD`), renamed to `position`
+   - `id` is renamed to `player_id` to match the database schema
+4. Converts types: expected-goals columns from strings to floats, `birth_date` from string to date.
+5. Adds `season` (`"2026-27"`) and `collected_at` (one timestamp per run, floored to the second).
+6. Saves a dated CSV snapshot to `scraper/data/fpl_players_YYYY-MM-DD.csv`.
+7. Appends all rows to the `player_stats` table via SQLAlchemy (`if_exists='append'`); a typical run inserts about 667 players.
 
-**Columns collected:**
+**Columns stored:**
 
 `player_id`, `first_name`, `second_name`, `web_name`, `team`, `position`, `birth_date`, `minutes`, `starts`, `goals_scored`, `assists`, `penalties_missed`, `clean_sheets`, `goals_conceded`, `own_goals`, `saves`, `penalties_saved`, `tackles`, `recoveries`, `clearances_blocks_interceptions`, `yellow_cards`, `red_cards`, `expected_goals`, `expected_assists`, `expected_goal_involvements`, `expected_goals_conceded`, `season`, `collected_at`
 
@@ -99,7 +115,7 @@ https://fbref.com/en/comps/9/2025-2026/2025-2026-Premier-League-Stats
 
 - **Database:** `pl_stats` (PostgreSQL 18, managed via pgAdmin)
 - **Table:** `player_stats`
-- **Primary key:** `(season, player_id, collected_at)` — one row per player per collection run, enabling time-series tracking across the season.
+- **Primary key:** `(season, player_id, collected_at)`: one row per player per collection run, which enables time-series tracking across the season.
 
 ```sql
 CREATE TABLE IF NOT EXISTS player_stats (
@@ -145,7 +161,8 @@ A **Spring Boot 4 / Java 21** REST API built with Spring Data JPA.
 
 - **Package:** `com.premierleague`
 - **Entry point:** `Application.java`
-- **Connects to:** PostgreSQL via `application.properties` (credentials injected via environment variables)
+- **Database connection:** configured in `application.properties`; credentials are injected through environment variables
+- **Schema handling:** `spring.jpa.hibernate.ddl-auto=validate`, so the entity must match `db/schema.sql` and Hibernate never modifies the table
 
 **Key classes:**
 
@@ -153,17 +170,17 @@ A **Spring Boot 4 / Java 21** REST API built with Spring Data JPA.
 |---|---|
 | `Player` | JPA entity mapped to `player_stats` |
 | `PlayerId` | Composite primary key class `(season, player_id, collected_at)` |
-| `PlayerRepository` | Spring Data JPA repository |
-| `PlayerService` | Business logic — filtering by team, position, name |
+| `PlayerRepository` | Spring Data JPA repository; finds the latest `collected_at` and filters within that run |
+| `PlayerService` | Business logic: read queries are scoped to the latest collection run, plus filtering by team, position and name |
 | `PlayerController` | REST controller, base path `/api/players` |
 
 ---
 
-### Frontend 
+### Frontend
 
-**Status: Work in progress — not yet implemented.**
+**Status: work in progress.**
 
-The frontend will be built with **React** and will consume the Spring Boot REST API to display player statistics, filter by team/position, and visualise season trends.
+The frontend will be built with **React**. It will consume the REST API to display player statistics, filter by team and position, and visualise how numbers develop over the season.
 
 ---
 
@@ -173,7 +190,7 @@ The frontend will be built with **React** and will consume the Spring Boot REST 
 
 - Python 3.10+
 - Java 21 (Amazon Corretto recommended)
-- Maven
+- Maven (or the included Maven wrapper `./mvnw`)
 - PostgreSQL 18
 - pgAdmin (optional, for DB management)
 
@@ -189,13 +206,13 @@ The frontend will be built with **React** and will consume the Spring Boot REST 
    psql -U postgres -d pl_stats -f db/schema.sql
    ```
 
-### Running the Scraper
+### Running the Data Collector
 
 ```bash
 cd scraper
 pip install -r requirements.txt
 
-# Set required env var
+# Required
 export DB_PASSWORD=your_password
 # Optional (defaults to "postgres")
 export DB_USERNAME=your_username
@@ -203,45 +220,55 @@ export DB_USERNAME=your_username
 python scraper.py
 ```
 
-A CSV is saved to `scraper/data/` and all rows are inserted into `player_stats`.
+A CSV snapshot is saved to `scraper/data/` (ignored by Git) and all rows are appended to `player_stats`. The script is currently run manually; each run adds a new snapshot.
 
 ### Running the Backend
 
 ```bash
 cd backend
 
-# Set required env vars
+# Required
 export DB_PASSWORD=your_password
-export DB_USERNAME=your_username   # defaults to "postgres"
+# Optional (defaults to "postgres")
+export DB_USERNAME=your_username
 
 ./mvnw spring-boot:run
 ```
 
-The API will be available at `http://localhost:8080`.
+The API is then available at `http://localhost:8080`.
 
 ---
 
 ## API Endpoints
 
-Base path: `/api/players`
+Base path: `/api/players`. Read endpoints return data from the most recent collection run.
 
 | Method | Path | Query params | Description |
 |--------|------|-------------|-------------|
-| `GET` | `/api/players` | — | All players (latest snapshot) |
+| `GET` | `/api/players` | none | All players (latest snapshot) |
 | `GET` | `/api/players` | `?team=Arsenal` | Filter by team |
-| `GET` | `/api/players` | `?position=FWD` | Filter by position |
-| `GET` | `/api/players` | `?team=Arsenal&position=FWD` | Filter by team + position |
-| `GET` | `/api/players` | `?name=Salah` | Search by name |
-| `GET` | `/api/players/{id}` | — | Single player by ID |
-| `POST` | `/api/players` | — | Create a player record |
-| `PUT` | `/api/players/{id}` | — | Update a player record |
-| `DELETE` | `/api/players/{id}` | — | Delete a player record |
+| `GET` | `/api/players` | `?position=FWD` | Filter by position (`GKP`, `DEF`, `MID`, `FWD`) |
+| `GET` | `/api/players` | `?team=Arsenal&position=FWD` | Filter by team and position |
+| `GET` | `/api/players` | `?name=Salah` | Case-insensitive search on `web_name` |
+| `GET` | `/api/players/{id}` | none | Latest record of a single player by FPL player ID |
+| `POST` | `/api/players` | none | Create a player record |
+| `PUT` | `/api/players/{id}` | none | Update the latest record of a player |
+| `DELETE` | `/api/players/{id}` | none | Delete all records of a player |
 
 ---
 
 ## Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `DB_PASSWORD` | Yes | — | PostgreSQL password |
-| `DB_USERNAME` | No | `postgres` | PostgreSQL username |
+| Variable | Required | Default | Used by | Description |
+|----------|----------|---------|---------|-------------|
+| `DB_PASSWORD` | Yes | none | Data collector, backend | PostgreSQL password |
+| `DB_USERNAME` | No | `postgres` | Data collector, backend | PostgreSQL username |
+
+---
+
+## Roadmap
+
+- Schedule the data collector (cron or GitHub Actions) instead of running it manually
+- Finish the React frontend
+- Ranking endpoints (e.g. top scorers, top xG)
+- Match-outcome prediction with machine learning
